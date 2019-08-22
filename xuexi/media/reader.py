@@ -32,7 +32,8 @@ class Reader:
         self.ad = ad
         self.xm = xm
         self.db = Model(cfg.get('common', 'database_article'))
-        self.enable_add_article = cfg.getboolean('common', 'enable_article_list')
+        # self.enable_add_article = cfg.getboolean('common', 'enable_article_list')
+        self.article_list = []
 
         self.home = 0j
         self.feeds = 0j
@@ -162,7 +163,7 @@ class Reader:
             pos_publish2 = self.xm.pos(cfg.get(self.rules, 'rule_publish_bounds'))
             if pos_publish2 == pos_publish:
                 logger.debug(f'# {pos_publish}没点着，按偏移量再点一次')
-                offset = cfg.getint('resolution', f'{max(self.ad.wmsize)}')
+                offset = round(0.0203*max(self.ad.wmsize) + 0.7595)
                 logger.debug(f'发布按钮偏移量 {offset} 屏幕大小 {self.ad.wmsize}')
                 self.ad.tap(pos_publish-complex(f'{offset}j')) # 由于下面有一栏输入法提示，导致这里pos或出现offset位置偏差，多点一次
             else:
@@ -236,7 +237,7 @@ class Reader:
                 poslist = [poslist]
             articles = [(t, p) for t, p in zip(self.xm.texts(cfg.get(self.rules, "rule_news_content")), poslist)]
             for title, pos in articles:
-                if self.db.has_article(title):
+                if title in self.article_list:
                     continue
                 with timer.Timer() as t:
                     count -= 1
@@ -253,8 +254,7 @@ class Reader:
                     self.ad.back()
                     sleep(1)
                 logger.info(f'新闻：第 {count:>2} 则已阅，耗时 {round(t.elapsed,2):>05} 秒')
-                if self.enable_add_article:
-                    self.db.add_article(title)
+                self.article_list.append(title)
                 if 0 == count:
                     break
             else:

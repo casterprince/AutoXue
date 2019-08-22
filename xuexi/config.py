@@ -22,7 +22,7 @@ except Exception:
 finally:
     cfg.read(CONFIG_PATH, encoding='utf-8')
 
-def print_config():
+if __name__ == "__main__":
     for section in cfg.sections():
         print(f'\n[{section}]')
         for option in cfg.options(section):
@@ -30,5 +30,5 @@ def print_config():
 
 
 
-if __name__ == "__main__":
-    print_config()
+
+

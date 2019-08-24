@@ -58,7 +58,15 @@ class Model():
             with path.open(mode='r', encoding='utf-8') as fp:
                 data = json.load(fp)
             for d in data:
-                self.add(Bank.from_dict(d))
+                temp = Bank.from_dict(d)
+                if '填空题' == temp.catagory and len(temp.answer.split()) != int(temp.options):
+                    continue
+                if '挑战题' == temp.catagory and '' == temp.answer:
+                    continue
+                self.add(temp)
+            else:
+                log.info(f'数据库更新完毕')
+                
 
     def dump(self):
         pathdir = Path(cfg.get('database_server', 'export'))
@@ -71,6 +79,8 @@ class Model():
                 content = re.sub(r'\s\s+', '\_\_\_\_',re.sub(r'[\(（]出题单位.*', '', item.content))
                 options = "\n\n".join([f'+ **{x}**' if i==ord(item.answer)-65 else f'+ {x}' for i, x in enumerate(item.options.split('|'))])
                 fp.write(f'{item.id}. {content}  *{item.answer}*\n\n{options}\n\n')
+            else:
+                log.debug(f'数据库导出 {md_doc}')
 
         md_grid = path / 'data-grid.md'
         with md_grid.open(mode='w', encoding='utf-8') as fp:
@@ -81,14 +91,18 @@ class Model():
                 content = re.sub(r'\s\s+', '\_\_\_\_',re.sub(r'[\(（]出题单位.*', '', item.content))
                 options = " | ".join([f'**{x}**' if i==ord(item.answer)-65 else f'{x}' for i, x in enumerate(item.options.split('|'))])
                 fp.write(f'| {item.id} | {item.answer} | {content} | {options} |\n')
+            else:
+                log.debug(f'数据库导出 {md_grid}')
 
         json_daily = pathdir / 'data-daily.json'
         with json_daily.open(mode='w', encoding='utf-8') as fp:
             json.dump([d.to_dict() for d in daily], fp, indent=4, ensure_ascii=False)
+        log.debug(f'数据库导出 {json_daily}')
 
         json_challenge = pathdir / 'data-challenge.json'
         with json_challenge.open(mode='w', encoding='utf-8') as fp:
             json.dump((c.to_dict() for c in challenge), fp, indent=4, ensure_ascii=False)
+        log.debug(f'数据库导出 {json_challenge}')
 
 
 

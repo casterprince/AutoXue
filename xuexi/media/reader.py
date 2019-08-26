@@ -108,6 +108,7 @@ class Reader:
         #     sleep(per_delay)
 
     def _star_share_comment(self, title):
+        keep_star_comment = cfg.getboolean('common', 'keep_star_comment')
         self._fresh()
         pos_comment = self.xm.pos(cfg.get(self.rules, 'rule_comment_bounds'))
         if pos_comment:
@@ -170,11 +171,30 @@ class Reader:
                 logger.debug('# 点着了，不用点了')                
             sleep(1)
 
+
             # 收藏
             self.ad.tap(pos_star)
             # logger.debug(f'收藏一篇文章 {pos_star}')
             logger.info(f'收藏一篇文章!')
             sleep(1) 
+            if not keep_star_comment:
+                sleep(2)
+                self._fresh()
+                pos_delete = self.xm.pos(cfg.get(self.rules, 'rule_delete_bounds'))
+                if not pos_delete:
+                    raise RuntimeError(f'没捕获的删除按钮')
+                if isinstance(pos_delete, list):
+                    pos_delete = pos_delete[0]
+                self.ad.tap(pos_delete)
+                sleep(1)
+                self.ad.uiautomator(filesize=3000)
+                self.xm.load()
+                pos_confirm = self.xm.pos(cfg.get(self.rules, 'rule_delete_confirm_bounds'))
+                self.ad.tap(pos_confirm)
+                logger.info(f'删除评论 ')
+                self.ad.tap(pos_star)
+                logger.info(f'取消收藏')
+                sleep(1)
             
             return 1
         else:

@@ -70,7 +70,7 @@ class Automation():
     def back(self):
         # https://blog.csdn.net/weixin_42082222/article/details/81298219
         self.driver.keyevent(4)
-        log.debug(f'KEYCODE_BACK pressed')
+        log.debug(f'触发返回事件 ...')
 
 
 class Xuexi(Automation):
@@ -85,10 +85,11 @@ class Xuexi(Automation):
             "appActivity": cfg.get('appium_server', 'app_activity'),
             "unicodeKeyboard": cfg.get('appium_server', 'unicode_keyboard'),
             "resetKeyboard": cfg.get('appium_server', 'reset_keyboard'),
-            "noReset": cfg.get('appium_server', 'no_reset')
+            "noReset": cfg.get('appium_server', 'no_reset'),
+            "deviceReadyTimeout": cfg.getint('appium_server', 'device_ready_timeout')
         }
-        wait_seconds = cfg.getint('appium_server', 'wait_seconds')
-        super().__init__(wait_seconds)
+        wait_until_seconds = cfg.getint('appium_server', 'wait_until_seconds')
+        super().__init__(wait_until_seconds)
 
         # 初始化一个空白题
         self.catagory = ''
@@ -123,6 +124,18 @@ class Xuexi(Automation):
     def view_videos(self, num:int, delay:int):
         log.debug(f'视听学习 {num} 则 {delay} 秒/则')
 
+    def get_score(self):
+        log.debug(f'获取积分情况，根据积分情况执行相关动作')
+        self.click(rules['mine'])
+        self.click(rules['score_entry'])
+        titles = '登录 阅读文章 视听学习 文章学习时长 视听学习时长 每日答题 每周答题 专项答题 挑战答题 订阅 收藏 分享 发表观点'.split(' ')
+        scores = self.wait.until(EC.presence_of_all_elements_located((By.XPATH, rules['score_nums'])))
+        for title, score in zip(titles, scores):
+            res = score.get_attribute('name')
+            obtain, total = [int(x) for x in re.findall(r'\d+', res)]
+            log.debug(f'{title} {obtain} / {total} {obtain < total}')
+        self.back()
+
     def quiz(self):
         ''' 0. click 學習（刷新）
             1. click 我的
@@ -133,12 +146,13 @@ class Xuexi(Automation):
         log.debug(f'我要答题')
         
         # step 0
-        self.click(rules['work'])
+        # self.click(rules['work'])
         # step 1
         self.click(rules['mine'])
-        print(f'contexts {self.driver.contexts}')
+        log.debug(f'contexts {self.driver.contexts}')
+        sleep(2)
         # step 2
-        self.click(rules['quiz'])
+        self.click(rules['quiz_entry'])
 
     def _get_note(self, count_edits=1)->bool:
         sleep(1)
@@ -272,13 +286,14 @@ class Xuexi(Automation):
             log.debug(f'未知的题目类型 {self.catagory}')
             raise RuntimeError(f'未知的题目类型 {self.catagory}')
 
-    def quiz_daily(self, auto=True, forever=False):
+    def quiz_daily(self, forever=False):
         ''' 0. click 每日答题
             1. cycle 填空题、单选题、多选题
             2. score_reached? back: again
         '''
         log.debug(f'每日答题( {forever} )')
         log.debug(self.driver.contexts)
+        delay = cfg.getint('prefer', 'delay_daily')
         # step 0
         self.click(rules['daily'])
         while True:
@@ -287,12 +302,17 @@ class Xuexi(Automation):
                 sleep(2)
             try:
                 reached = self.driver.find_element_by_xpath(rules['score_reached'])
-                log.info(f'已达成今日份每日答题，返回')
-                self.click(rules['return'])
-                break
+                if not forever:
+                    log.info(f'已达成今日份每日答题，返回')
+                    self.click(rules['return'])
+                    break
+                else:
+                    log.info(f'未达到6分, {delay} 秒后再来一组')
+                    sleep(delay)
+                    self.click(rules['next'])
+                    continue 
             except:
-                delay = cfg.getint('prefer', 'delay_daily')
-                log.info(f'未达到6分, {dealy} 秒后再来一组')
+                log.info(f'未达到6分, {delay} 秒后再来一组')
                 sleep(delay)
                 self.click(rules['next'])
                 continue
@@ -332,9 +352,14 @@ class Xuexi(Automation):
                 
 
 
-
-
     def quiz_challenge(self, num:int=30, delay:int=2):
+        while self._quiz_challenge_round(num, delay):
+            log.debug(f'没有达成 {num} 题, 再来一局')
+        else:
+            log.debug(f'挑战达成，哈哈哈')
+            
+
+    def _quiz_challenge_round(self, num:int=30, delay:int=2):
         ''' 0. click 挑战答题
             1. cycle 挑战题
             2. question_count_reached? back: again
@@ -363,29 +388,36 @@ class Xuexi(Automation):
                 search_answer = self._search(bank)
                 log.info(f'尝试提交答案 {search_answer}')
             options[ord(search_answer) - 65].click()
-            sleep(1)
+            sleep(3)
             try:
                 stop_round = self.driver.find_element_by_xpath(rules['stop'])
                 log.debug(f'回答错误')
-                bank.note += search_answer
-                db.update(bank)
-                stop_round.click()
+                if not bank:
+                    log.debug(f'新增一题: 含排除项 {search_answer}')
+                    toadd = Bank(catagory='挑战题', content=self.content, options=self.options, answer='', note=search_answer)
+                    db.add(toadd)
+                else:
+                    log.debug(f'更新一题: 含排除项 {search_answer}')
+                    bank.note += search_answer
+                    db.update(bank)
+                self.back()
+                break
             except:
                 log.debug(f'回答正确')
                 if not bank:
+                    log.debug(f'新增一题: 含正确项 {search_answer}')
                     toadd = Bank(catagory='挑战题', content=self.content, options=self.options, answer=search_answer, note='')
                     db.add(toadd)
-                else:
-                    bank.note = ''
-                    db.update(bank)
-                sleep(delay)
-        else:
-            log.info(f'已达成目标题数，30秒后自动死亡退出 ...')
+            sleep(delay)
+        else: # end while
+            log.info(f'已达成目标题数，等待30秒死亡 ...')
             sleep(30)
             self.back()
+        return num
 
 if __name__ == "__main__":
     app = Xuexi()
-    app.quiz()
+    app.get_score()
+    app.quiz()    
     # app.quiz_daily()
-    app.quiz_challenge()
+    # app.quiz_challenge(900)

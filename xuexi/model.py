@@ -16,6 +16,7 @@ from sqlalchemy import Column,Integer, String, Text, Boolean, create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from .mconfig import cfg
+from .mloggger import logger as log
 
 # 创建对象的基类:
 Base = declarative_base()
@@ -45,11 +46,16 @@ class Model():
         '''数据库添加纪录'''
         result = self.query(content=item.content, catagory=item.catagory)
         if result:
-            logger.info(f'数据库已存在此纪录，无需添加纪录！')
+            log.info(f'数据库已存在此纪录，无需添加纪录！')
         else:
             self.session.add(item)
             self.session.commit()
-            logger.info(f'数据库添加记录成功！')
+            log.info(f'数据库添加记录成功！')
+
+    def update(self, item):
+        self.session.add(item)
+        self.session.commit()
+        log.info(f'数据库更新记录成功！')
 
     def load(self, path):
         if '.json' != path.suffix:
@@ -59,6 +65,8 @@ class Model():
                 data = json.load(fp)
             for d in data:
                 temp = Bank.from_dict(d)
+                # if not temp.options and not temp.note:
+                #     continue
                 if '填空题' == temp.catagory and len(temp.answer.split()) != int(temp.options):
                     continue
                 if '挑战题' == temp.catagory and '' == temp.answer:
@@ -68,26 +76,31 @@ class Model():
                 log.info(f'数据库更新完毕')
                 
 
-    def dump(self):
+    def dump(self, ):
         pathdir = Path(cfg.get('database_server', 'export'))
+        pathdir.mkdir(parents=True, exist_ok=True)
         daily = self.query(catagory='填空题 单选题 多选题')
         challenge = self.query(catagory='挑战题')
         md_doc = pathdir / 'data-doc.md'
         with md_doc.open(mode='w', encoding='utf-8') as fp:
-            fp.write(f'# 学习强国 挑战答题 题库 {len(items):>4} 题\n')
+            fp.write(f'# 学习强国 挑战答题 题库 {len(challenge):>4} 题\n')
             for item in challenge:
+                if not item.answer:
+                    continue
                 content = re.sub(r'\s\s+', '\_\_\_\_',re.sub(r'[\(（]出题单位.*', '', item.content))
                 options = "\n\n".join([f'+ **{x}**' if i==ord(item.answer)-65 else f'+ {x}' for i, x in enumerate(item.options.split('|'))])
                 fp.write(f'{item.id}. {content}  *{item.answer}*\n\n{options}\n\n')
             else:
                 log.debug(f'数据库导出 {md_doc}')
 
-        md_grid = path / 'data-grid.md'
+        md_grid = pathdir / 'data-grid.md'
         with md_grid.open(mode='w', encoding='utf-8') as fp:
-            fp.write(f'# 学习强国 挑战答题 题库 {len(items):>4} 题\n')
+            fp.write(f'# 学习强国 挑战答题 题库 {len(challenge):>4} 题\n')
             fp.write(f'|序号|答案|题干|选项A|选项B|选项C|选项D|\n')
             fp.write(f'|:--:|:--:|--------|----|----|----|----|\n')
             for item in challenge:
+                if not item.answer:
+                    continue
                 content = re.sub(r'\s\s+', '\_\_\_\_',re.sub(r'[\(（]出题单位.*', '', item.content))
                 options = " | ".join([f'**{x}**' if i==ord(item.answer)-65 else f'{x}' for i, x in enumerate(item.options.split('|'))])
                 fp.write(f'| {item.id} | {item.answer} | {content} | {options} |\n')
@@ -101,7 +114,7 @@ class Model():
 
         json_challenge = pathdir / 'data-challenge.json'
         with json_challenge.open(mode='w', encoding='utf-8') as fp:
-            json.dump((c.to_dict() for c in challenge), fp, indent=4, ensure_ascii=False)
+            json.dump([c.to_dict() for c in challenge], fp, indent=4, ensure_ascii=False)
         log.debug(f'数据库导出 {json_challenge}')
 
 
@@ -128,8 +141,12 @@ class Bank(Base):
         self.content = content or 'default content'
         if not options:
             self.options = ''
+        elif isinstance(options, int):
+            self.options = str(options)
+        elif isinstance(options, list):
+            self.options = "|".join([str(x) for x in options]) or ''
         else:
-            self.options = "|".join(str(x) for x in options) or ''
+            pass
         self.answer = answer.upper() or ''
         self.note = note or ''
 
@@ -137,12 +154,12 @@ class Bank(Base):
         return f'<Bank {self.content}>'
 
     def __str__(self):
-        return f'{self.content}'
+        return f'{self.catagory} {self.content} {self.options} {self.answer} {self.note}'
 
     def to_dict(self):
         dict_bank = {
             "id": self.id,
-            "category": self.catagory,
+            "catagory": self.catagory,
             "content": self.content,
             "options": self.options,
             "answer": self.answer,
@@ -152,12 +169,17 @@ class Bank(Base):
 
     @classmethod
     def from_dict(cls, item):
-        return cls( category=item['category'],
+        return cls( catagory=item['catagory'],
                     content=item['content'],
-                    options=item['options'],
+                    options=item['options'].split('|'),
                     answer=item['answer'],
                     note=item['note'])
 
+db = Model()
 
-
+if __name__ == "__main__":
+    db = Model()
+    # db.load(Path('./xuexi/sources/data-c.json'))
+    # db.load(Path('./xuexi/sources/data-d.json'))
+    db.dump()
 

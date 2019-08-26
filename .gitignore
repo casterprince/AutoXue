@@ -105,6 +105,7 @@ venv.bak/
 项目依赖/
 xuexi/data-article.sqlite
 xuexi/config-custom.ini
+xuexi/config/custom.ini
 *.log
 *.xml
 *.png

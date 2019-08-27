@@ -122,10 +122,10 @@ class Model():
         '''数据库检索记录'''
         catagory = catagory.split(' ')
         if id and isinstance(id, int):
-            return self.session.query(Bank).filter_by(id=id).one_or_none()
+            return self.session.query(Bank).filter_by(id=id).first()
         if content and isinstance(content, str):
             content = re.sub(r'\s+', '%', content)
-            return self.session.query(Bank).filter(Bank.catagory.in_(catagory)).filter(Bank.content.like(content)).one_or_none()
+            return self.session.query(Bank).filter(Bank.catagory.in_(catagory)).filter(Bank.content.like(content)).first()
         return self.session.query(Bank).filter(Bank.catagory.in_(catagory)).all()
 
     def add(self, item):

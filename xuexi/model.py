@@ -50,7 +50,7 @@ class Model():
         else:
             self.session.add(item)
             self.session.commit()
-            log.info(f'数据库添加记录成功！')
+            log.info(f'数据库添加记录成功！<{item.catagory} - {item.id:>4}> {item.answer}')
 
     def update(self, item):
         self.session.add(item)
@@ -76,7 +76,7 @@ class Model():
                 log.info(f'数据库更新完毕')
                 
 
-    def dump(self, ):
+    def dump(self):
         pathdir = Path(cfg.get('database_server', 'export'))
         pathdir.mkdir(parents=True, exist_ok=True)
         daily = self.query(catagory='填空题 单选题 多选题')
@@ -179,7 +179,7 @@ db = Model()
 
 if __name__ == "__main__":
     db = Model()
-    # db.load(Path('./xuexi/sources/data-c.json'))
-    # db.load(Path('./xuexi/sources/data-d.json'))
-    db.dump()
+    db.load(Path('./xuexi/sources/exports/data-challenge.json'))
+    db.load(Path('./xuexi/sources/exports/data-daily.json'))
+    # db.dump()
 

@@ -8,7 +8,7 @@
 @time: 2019-08-26(星期一) 22:26
 @Copyright © 2019. All rights reserved.
 '''
-
+import os
 import re
 import json
 import requests
@@ -20,6 +20,7 @@ from subprocess import check_call
 from random import uniform, randint
 from itertools import accumulate
 from appium import webdriver
+from appium.webdriver.common.touch_action import TouchAction
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
@@ -37,7 +38,10 @@ class Automation():
         self.size = self.driver.get_window_size()
 
     def __del__(self):
-        self.driver.close_app()
+        try:
+            self.driver.close_app()
+        except:
+            log.debug(f'还没有连接设备')
 
     def connect_device(self):
         pass
@@ -151,19 +155,56 @@ class Xuexi(Automation):
         log.debug(f'获取积分情况，根据积分情况执行相关动作')
         bonus = {}
         self.click(rules['mine'])
-        self.click(rules['score_entry'])
-        titles = '登录 阅读文章 视听学习 文章学习时长 视听学习时长 每日答题 每周答题 专项答题 挑战答题 订阅 收藏 分享 发表观点'.split(' ')
-        scores = self.wait.until(EC.presence_of_all_elements_located((By.XPATH, rules['score_nums'])))
-        for title, score in zip(titles, scores):
-            res = score.get_attribute('name')
-            obtain, total = [int(x) for x in re.findall(r'\d+', res)]
-            bonus.setdefault(title, (obtain, total))
-            log.debug(f'{title:8} {obtain}/{total} {("×", "√")[obtain == total]}')
+        self.click(rules['bonus_entry'])
+        # titles = '登录 阅读文章 视听学习 文章学习时长 视听学习时长 每日答题 每周答题 专项答题 挑战答题 订阅 收藏 分享 发表观点'.split(' ')
+        getting_bonus = True
+        while getting_bonus:
+            titles = [ele.get_attribute('name') for ele in self.wait.until(EC.presence_of_all_elements_located((By.XPATH, rules['bonus_titles'])))]
+            scores = self.wait.until(EC.presence_of_all_elements_located((By.XPATH, rules['bonus_nums'])))
+            for title, score in zip(titles, scores):
+                res = score.get_attribute('name')
+                obtain, total = [int(x) for x in re.findall(r'\d+', res)]
+                bonus.setdefault(title, (obtain, total))
+                log.debug(f'{title:8} {obtain}/{total} {("×", "√")[obtain == total]}')
+                if '发表观点' == title:
+                    getting_bonus = False
+                    break
+            else:
+                self.swipeUp()
+        print()
+        for title in ['阅读文章', '视听学习', '每日答题', '挑战答题']:
+            obtain, total = bonus[title]
+            print(f'\t[{("×", "√")[obtain == total]}]{title} {obtain}/{total}', end='')
+        print()
         self.back()
         return bonus
+    def star_share_comment(self):
+        pass
 
     def read_articles(self, num:int, delay:int, ssc:int):
         log.debug(f'阅读文章 {num} 篇 {delay} 秒/篇')
+        return
+        tab_name = cfg.get('prefer', 'column_of_news')
+        finding_column = True
+        self.click(rules['work'])
+        while finding_column:
+            columns = self.wait.until(EC.presence_of_all_elements_located((By.XPATH, rules['column_name'])))
+            first_column = columns[0]
+            for column in columns:
+                column_name = column.get_attribute('name')
+                log.debug(f'current {column_name} {column.location}, target {tab_name}')
+                if tab_name == column_name:
+                    column.click()
+                    finding_column = False
+                    break
+            else:
+                log.debug(f'没有找到栏目 {tab_name} 拖动一屏 ...')
+                self.driver.swipe(column.location['x'], column.location['y'], first_column.location['x'], first_column.location['y'], 500)
+        news = self.wait.until(EC.presence_of_all_elements_located((By.XPATH, rules['news_list'])))
+        fixed_top, fixed_bottom = news[0], news[-1]
+        readed_list = []
+
+            
 
     def view_videos(self, num:int, delay:int):
         log.debug(f'视听学习 {num} 则 {delay} 秒/则')
@@ -185,8 +226,44 @@ class Xuexi(Automation):
         self.click(rules['mine'])
         log.debug(f'contexts {self.driver.contexts}')
         time.sleep(2)
-        # step 2
         self.click(rules['quiz_entry'])
+        quiz_weekday = cfg.get('prefer', 'quiz_weekday')
+        try:
+            force = int(os.environ.get('FORCE_DAILY')) or 0
+        except:
+            force = 0
+            
+        delay = cfg.getint('prefer', 'delay_daily')
+        daily_obtain, daily_total = self.bonus['每日答题']
+        self.quiz_daily(obtain=daily_obtain, total=daily_total, delay=delay, force=force)
+
+        challenge_obtain, challenge_total = self.bonus['挑战答题']
+        if challenge_obtain == challenge_total:
+            log.debug(f'挑战答题已完成，跳过挑战答题')
+        else:
+            num = cfg.getint('prefer', 'count_challenge')
+            delay = cfg.getint('prefer', 'delay_challenge')
+            self.quiz_challenge(num, delay)
+
+        today_weekday = time.strftime("%A", time.localtime())
+        if quiz_weekday == today_weekday:
+            weekly_obtain, _ = self.bonus['每周答题']
+            if 0 == weekly_obtain:
+                self.weekly()
+            else:
+                log.debug(f'每周答题已挑战，跳过每周答题')
+
+            monthly_obtain, _ = self.bonus['专项答题']
+            if 0 == monthly_obtain:
+                self.monthly()
+            else:
+                log.debug(f'专项答题已挑战，跳过专项答题')
+        else:
+            log.debug(f'今天是 {today_weekday} 而不是 {quiz_weekday} 原谅我不做每周答题和专项答题')
+        
+        self.quiz_challenge(900, 2)
+        # 此时答题项目全部完成，是时候返回一步到首页去了
+        self.back()
 
     def _split_str_by_tuple(self, source:str, edit_tuple:tuple)->str:
         if len(source) != sum(edit_tuple):
@@ -347,37 +424,60 @@ class Xuexi(Automation):
             log.debug(f'未知的题目类型 {self.catagory}')
             raise RuntimeError(f'未知的题目类型 {self.catagory}')
 
-    def quiz_daily(self, delay=3, force=0):
+    def quiz_daily(self, obtain, total, delay=3, force=0):
         ''' 0. click 每日答题
             1. cycle 填空题、单选题、多选题
             2. score_reached? back: again
-        '''
+        '''        
+        if total - obtain + force == 0:
+            return 
         log.debug(f'每日答题 {delay} 秒/组 (force | {force})')
-        # step 0
         self.click(rules['daily'])
         while True:
             for i in range(5):
                 self._dispatch()
-                time.sleep(2)
+                time.sleep(1)
 
-            time.sleep(3)
-            try:
-                reached = self.driver.find_element_by_xpath(rules['score_reached'])
-                if 0 == force:
-                    log.info(f'已达成今日份每日答题，返回')
-                    self.click(rules['return'])
-                    break
-                else:
-                    log.info(f'额外要求再来一组：第 {force} 组, {delay} 秒后开始 ...')
-                    force -= 1
-                    time.sleep(delay)
-                    self.click(rules['next'])
-                    continue 
-            except:
-                log.info(f'未达到6分, {delay} 秒后再来一组 ...')
+            # 通过计算得分情况作为结束标志
+            score = int(self.wait.until(EC.presence_of_element_located((By.XPATH, rules['score']))).get_attribute('name'))
+            obtain += score
+            if obtain < total:
+                log.info(f'每日答题积分{obtain}/{total},再来一组 ...')
                 time.sleep(delay)
                 self.click(rules['next'])
                 continue
+            else:
+                log.info(f'每日答题积分{obtain}/{total},已达成')
+                if 0 == force:
+                    log.debug(f'已完成指定的额外答题任务，返回')
+                    self.click(rules['return'])
+                    break
+                else:
+                    log.debug(f'指定的额外答题任务，还剩{force}组，加油！')
+                    force -= 1
+                    time.sleep(delay)
+                    self.click(rules['next'])
+                    continue
+
+            # 通过 领取奖励已达今日上限 标识判定结束
+            # time.sleep(3)
+            # try:
+            #     reached = self.driver.find_element_by_xpath(rules['score_reached'])
+            #     if 0 == force:
+            #         log.info(f'已达成今日份每日答题，返回')
+            #         self.click(rules['return'])
+            #         break
+            #     else:
+            #         log.info(f'额外要求再来一组：第 {force} 组, {delay} 秒后开始 ...')
+            #         force -= 1
+            #         time.sleep(delay)
+            #         self.click(rules['next'])
+            #         continue 
+            # except:
+            #     log.info(f'未达到6分, {delay} 秒后再来一组 ...')
+            #     time.sleep(delay)
+            #     self.click(rules['next'])
+            #     continue
 
 
     def quiz_weekly(self, auto=False):
@@ -434,7 +534,6 @@ class Xuexi(Automation):
         log.debug(f'挑战答题 {num} 题 延时提交 {delay} 秒/题')
         self.click(rules['challenge'])
         while num:
-            num -= 1
             log.debug(f'挑战答题 第 {num} 题')
             self.content = self.wait.until(EC.presence_of_element_located((By.XPATH, rules['content_challenge']))).get_attribute('name').replace(u'\xa0', u' ')
             log.info(f'[挑战题] {self.content}')
@@ -469,6 +568,7 @@ class Xuexi(Automation):
                 break
             except:
                 log.debug(f'回答正确')
+                num -= 1
                 if not bank:
                     log.debug(f'新增一题: 含正确项 {search_answer}')
                     toadd = Bank(catagory='挑战题', content=self.content, options=self.options, answer=search_answer, note='')
@@ -481,51 +581,11 @@ class Xuexi(Automation):
         return num
 
     def cycle(self):
-        '''因为刚获取分数情况，此时页面在mine页面，所以先做答题任务'''
-        quiz_weekday = cfg.get('prefer', 'quiz_weekday')
+        '''因为刚获取分数情况，此时页面在mine页面，所以先做答题任务'''        
         self.quiz()
-        force = cfg.getint('prefer', 'force_daily')
-        delay = cfg.getint('prefer', 'delay_daily')
-        daily_obtain, daily_total = self.bonus['每日答题']
-        if daily_obtain < daily_total:
-            self.quiz_daily(delay=delay)
-        else:
-            log.debug(f'每日答题已完成，跳过每日答题')
-        if force > 0:
-            log.debug(f'强行要求做 {force} 组每日答题，人家没办法')
-            self.quiz_daily(delay=delay, force=force)
-        else:
-            log.debug(f'没有强制要求的每日答题')
-
-        challenge_obtain, challenge_total = self.bonus['挑战答题']
-        if challenge_obtain == challenge_total:
-            log.debug(f'挑战答题已完成，跳过挑战答题')
-        else:
-            num = cfg.getint('prefer', 'count_challenge')
-            delay = cfg.getint('prefer', 'delay_challenge')
-            self.quiz_challenge(num, delay)
-        today_weekday = time.strftime("%A", time.localtime())
-        if quiz_weekday == today_weekday:
-            weekly_obtain, _ = self.bonus['每周答题']
-            if 0 == weekly_obtain:
-                self.weekly()
-            else:
-                log.debug(f'每周答题已挑战，跳过每周答题')
-
-            monthly_obtain, _ = self.bonus['专项答题']
-            if 0 == monthly_obtain:
-                self.monthly()
-            else:
-                log.debug(f'专项答题已挑战，跳过专项答题')
-        else:
-            log.debug(f'今天是 {today_weekday} 而不是 {quiz_weekday} 原谅我不做每周答题和专项答题')
-        
-
-        # 此时答题项目全部完成，是时候返回一步到首页去了
-        self.back()
 
         '''收藏、分享、评论 只要需要阅读就直接来一套，不阅读即忽略
-            不要问为什么，也不要提这个issue, 因为作者就这么懒.-_-.
+            不要问为什么，因为作者就这么懒.-_-.
         '''
         read_obtain, read_total = self.bonus['阅读文章']
         read_time_obtain, read_time_total = self.bonus['文章学习时长']

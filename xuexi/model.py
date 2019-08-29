@@ -179,7 +179,7 @@ db = Model()
 
 if __name__ == "__main__":
     db = Model()
-    db.load(Path('./xuexi/sources/exports/data-challenge.json'))
-    db.load(Path('./xuexi/sources/exports/data-daily.json'))
-    # db.dump()
+    # db.load(Path('./xuexi/sources/exports/data-challenge.json'))
+    # db.load(Path('./xuexi/sources/exports/data-daily.json'))
+    db.dump()
 

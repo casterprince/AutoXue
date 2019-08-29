@@ -34,12 +34,10 @@ if args.filename:
         db.download(args.filename)
     else:
         pass
-elif any([args.article, args.video, args.daily, args.challenge]):
-    print(f'\n\t阅读文章{("[×]", "[√]")[args.article]}\t视听学习{("[×]", "[√]")[args.video]}\t每日答题{("[×]", "[√]")[args.daily]}\t挑战答题{("[×]", "[√]")[args.challenge]}\n')
+else:
+    # print(f'\n\t阅读文章{("[×]", "[√]")[args.article]}\t视听学习{("[×]", "[√]")[args.video]}\t每日答题{("[×]", "[√]")[args.daily]}\t挑战答题{("[×]", "[√]")[args.challenge]}\n')
     from . import App
     app = App()
-    app.start(args.article, args.video, args.daily, args.challenge)
-else:
-    logger.info(f'啥都没输入哈哈')
-    pass
+    app.start()
+
 

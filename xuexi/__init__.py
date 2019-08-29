@@ -11,6 +11,7 @@
 
 from pathlib import Path
 import re
+from time import sleep
 from configparser import ConfigParser
 from .logs import create_logger
 
@@ -34,6 +35,31 @@ class App(object):
                             cfg.get(self.rules, 'host'),
                             cfg.getint(self.rules, 'port'))
         self.xm = xmler.Xmler(self.xmluri)
+        self.bonus = self._get_bonus()
+
+    def _fresh(self):
+        self.ad.uiautomator()
+        self.xm.load()
+
+    def _get_bonus(self):
+        bonus = {}
+        self._fresh()
+        pos_mine = self.xm.pos(cfg.get(self.rules, 'rule_bottom_mine'))
+        self.ad.tap(pos_mine)
+        sleep(2)
+        self._fresh()
+        pos_bonus = self.xm.pos(cfg.get(self.rules, 'rule_bonus_entry'))
+        self.ad.tap(pos_bonus)
+        sleep(5)
+        self._fresh()
+        titles = self.xm.texts(cfg.get(self.rules, 'rule_bonus_title'))
+        scores = self.xm.texts(cfg.get(self.rules, 'rule_bonus_score'))
+        for title, score in zip(titles, scores):
+            logger.info(f'{title} {score}')
+            bonus.setdefault(title, score)
+        self.ad.back()
+        return bonus
+        
 
     def _art_run(self):
         logger.debug(f'阅读文章,开始')
@@ -56,17 +82,21 @@ class App(object):
         qApp = Quiz(self.rules, self.ad, self.xm)
         qApp.start(day, chg)
 
-    def start(self, art, vdo, day, chg):
+    def start(self):
+        day = '已完成' != self.bonus['每日答题']
+        chg = '已完成' != self.bonus['挑战答题']
         if day or chg:
             with timer.Timer() as t:
                 self._quiz_run(day, chg)
             logger.info(f'答题耗时 {round(t.elapsed, 2)} 秒')
-
+        
+        vdo = '已完成' != self.bonus['视听学习'] or '已完成' != self.bonus['视听学习时长']
         if vdo:
             with timer.Timer() as t:
                 self._vdo_run()
             logger.info(f'视听学习耗时 {round(t.elapsed, 2)} 秒')
-        
+
+        art = '已完成' != self.bonus['阅读文章'] or '已完成' != self.bonus['文章阅读时长']
         if art:
             with timer.Timer() as t:
                 self._art_run()

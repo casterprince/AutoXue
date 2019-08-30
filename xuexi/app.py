@@ -25,8 +25,9 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from .model import db, Bank
-from .mconfig import cfg, rules
-from .mloggger import logger as log
+from .common import cfg, rules
+from .common import logger as log
+from .common import Timer
 
 class Automation():
     # 初始化 appium_server 基本参数
@@ -75,16 +76,22 @@ class Automation():
         log.debug(f'向右滑动屏幕')
 
     def click(self, rule):
-        ele = self.wait.until(EC.presence_of_element_located((By.XPATH, rule)))
-        log.debug(f'click {rule}')
+        log.debug(f'clicking {rule}')
+        ele = self.wait.until(EC.presence_of_element_located((By.XPATH, rule)))        
         ele.click()
         time.sleep(1)
         log.debug(f'contexts {self.driver.contexts}')
 
     def back(self):
         # https://blog.csdn.net/weixin_42082222/article/details/81298219
+        log.debug(f'触发 KEY_CODE_BACK 事件 ...')
         self.driver.keyevent(4)
-        log.debug(f'触发返回事件 ...')
+        
+
+    def mute(self):
+        log.debug(f'触发 KEYCODE_VOLUME_MUTE 事件 ...')
+        self.driver.keyevent(164)
+
 
 
 class Xuexi(Automation):
@@ -174,16 +181,18 @@ class Xuexi(Automation):
         print()
         for title in ['阅读文章', '视听学习', '每日答题', '挑战答题']:
             obtain, total = bonus[title]
-            print(f'\t[{("×", "√")[obtain == total]}]{title} {obtain}/{total}', end='')
+            print(f'\t{title} {obtain}/{total}', end='')
         print()
         self.back()
         return bonus
-    def star_share_comment(self):
-        pass
+
+
+    def _star_share_comment(self, title):
+        log.debug(f'{title} Star Share Comment 三件套 ...')
+        return 1
 
     def read_articles(self, num:int, delay:int, ssc:int):
         log.debug(f'阅读文章 {num} 篇 {delay} 秒/篇')
-        return
         tab_name = cfg.get('prefer', 'column_of_news')
         finding_column = True
         self.click(rules['work'])
@@ -200,16 +209,52 @@ class Xuexi(Automation):
             else:
                 log.debug(f'没有找到栏目 {tab_name} 拖动一屏 ...')
                 self.driver.swipe(column.location['x'], column.location['y'], first_column.location['x'], first_column.location['y'], 500)
-        news = self.wait.until(EC.presence_of_all_elements_located((By.XPATH, rules['news_list'])))
-        fixed_top, fixed_bottom = news[0], news[-1]
         readed_list = []
+        while num > 0:
+            news = self.wait.until(EC.presence_of_all_elements_located((By.XPATH, rules['news_list'])))
+            fixed_top, fixed_bottom = news[0], news[-1]
+            try:
+                articles = self.driver.find_elements_by_xpath(rules['news_title'])
+            except:
+                articles = []
+            for article in articles:                
+                title = article.get_attribute('name')
+                if title in readed_list:
+                    continue
+                num -= 1
+                log.info(f'[{num}] {title}')
+                article.click()
+                time.sleep(delay)                
+                if ssc > 0:
+                    ssc -= self._star_share_comment(title)
+                self.back()
+                readed_list.append(title)
+            else:
+                self.driver.swipe(fixed_bottom.location['x'], fixed_bottom.location['y'], 
+                                fixed_top.location['x'], fixed_top.location['x'], 1000)
+        else:
+            log.debug(f'新闻学习完毕!')
+        
+
 
             
 
     def view_videos(self, num:int, delay:int):
         log.debug(f'视听学习 {num} 则 {delay} 秒/则')
 
-
+    def bg_fm(self):
+        ''' 如果视听学习时长未达标，进入APP先打开后台FM'''
+        is_mute = cfg.getboolean('prefer', 'volume_mute')
+        if is_mute:
+            self.mute()
+        channel = cfg.get('prefer', 'channel_of_fm')
+        log.info(f'请不要介意我打开 FM {channel}')
+        self.click(rules['contact'])
+        self.click(rules['audiovisual_entry'])
+        rule = re.sub(r'default_channel', channel, rules['fm_channel'])
+        self.click(rule)
+        time.sleep(3)
+        # self.click(rules['work'])
 
     def quiz(self):
         ''' 0. click 學習（刷新）
@@ -228,14 +273,20 @@ class Xuexi(Automation):
         time.sleep(2)
         self.click(rules['quiz_entry'])
         quiz_weekday = cfg.get('prefer', 'quiz_weekday')
+        force_daily, force_challenge = 0, 0
         try:
-            force = int(os.environ.get('FORCE_DAILY')) or 0
+            force_daily = int(os.environ.get('FORCE_DAILY'))
         except:
-            force = 0
-            
+            log.debug(f'没有指定 FORCE_DAILY')
+        try:
+            force_challenge = int(os.environ.get('FORCE_CHALLENGE'))
+        except:
+            log.debug(f'没有指定 FORCE_CHALLENGE')
+        log.debug(f'FORCE_DAILY: {force_daily}\tFORCE_CHALLENGE: {force_challenge}')
+
         delay = cfg.getint('prefer', 'delay_daily')
         daily_obtain, daily_total = self.bonus['每日答题']
-        self.quiz_daily(obtain=daily_obtain, total=daily_total, delay=delay, force=force)
+        self.quiz_daily(obtain=daily_obtain, total=daily_total, delay=delay, force_daily=force_daily)
 
         challenge_obtain, challenge_total = self.bonus['挑战答题']
         if challenge_obtain == challenge_total:
@@ -244,6 +295,9 @@ class Xuexi(Automation):
             num = cfg.getint('prefer', 'count_challenge')
             delay = cfg.getint('prefer', 'delay_challenge')
             self.quiz_challenge(num, delay)
+        if force_challenge > 0:
+            log.debug(f'额外执行挑战 {force_challenge} 题')
+            self.quiz_challenge(force_challenge)
 
         today_weekday = time.strftime("%A", time.localtime())
         if quiz_weekday == today_weekday:
@@ -261,7 +315,6 @@ class Xuexi(Automation):
         else:
             log.debug(f'今天是 {today_weekday} 而不是 {quiz_weekday} 原谅我不做每周答题和专项答题')
         
-        self.quiz_challenge(900, 2)
         # 此时答题项目全部完成，是时候返回一步到首页去了
         self.back()
 
@@ -273,7 +326,6 @@ class Xuexi(Automation):
         for i in lx[-2::-1]:
             s.insert(i, ' ')
         return ''.join(s)
-
 
     def _get_note(self, count_edits=1, each_edit:list=None)->bool:
         time.sleep(1)
@@ -302,7 +354,6 @@ class Xuexi(Automation):
             else:
                 log.debug(f'题库存在，不用添加')
             return True
-
 
     def _solve_blank(self):
         log.debug(f'这是一道填空题 ...')
@@ -343,7 +394,6 @@ class Xuexi(Automation):
         if not self._get_note(len(edits), each_edit=each_edit):
             # 答错了，点击 下一题
             self.click(rules['submit'])
-
 
     def _solve_radio(self):
         log.debug(f'这是一道单选题 ...')
@@ -424,14 +474,15 @@ class Xuexi(Automation):
             log.debug(f'未知的题目类型 {self.catagory}')
             raise RuntimeError(f'未知的题目类型 {self.catagory}')
 
-    def quiz_daily(self, obtain, total, delay=3, force=0):
+    def quiz_daily(self, obtain, total, delay=3, force_daily=0):
         ''' 0. click 每日答题
             1. cycle 填空题、单选题、多选题
             2. score_reached? back: again
         '''        
-        if total - obtain + force == 0:
+        if total - obtain + force_daily == 0:
+            log.debug(f'{obtain}/{total} [{force_daily}] 跳过每日答题')
             return 
-        log.debug(f'每日答题 {delay} 秒/组 (force | {force})')
+        log.debug(f'每日答题 {delay} 秒/组 (force_daily | {force_daily})')
         self.click(rules['daily'])
         while True:
             for i in range(5):
@@ -448,13 +499,13 @@ class Xuexi(Automation):
                 continue
             else:
                 log.info(f'每日答题积分{obtain}/{total},已达成')
-                if 0 == force:
+                if 0 == force_daily:
                     log.debug(f'已完成指定的额外答题任务，返回')
                     self.click(rules['return'])
                     break
                 else:
-                    log.debug(f'指定的额外答题任务，还剩{force}组，加油！')
-                    force -= 1
+                    log.debug(f'指定的额外答题任务，还剩{force_daily}组，加油！')
+                    force_daily -= 1
                     time.sleep(delay)
                     self.click(rules['next'])
                     continue
@@ -463,13 +514,13 @@ class Xuexi(Automation):
             # time.sleep(3)
             # try:
             #     reached = self.driver.find_element_by_xpath(rules['score_reached'])
-            #     if 0 == force:
+            #     if 0 == force_daily:
             #         log.info(f'已达成今日份每日答题，返回')
             #         self.click(rules['return'])
             #         break
             #     else:
-            #         log.info(f'额外要求再来一组：第 {force} 组, {delay} 秒后开始 ...')
-            #         force -= 1
+            #         log.info(f'额外要求再来一组：第 {force_daily} 组, {delay} 秒后开始 ...')
+            #         force_daily -= 1
             #         time.sleep(delay)
             #         self.click(rules['next'])
             #         continue 
@@ -478,7 +529,6 @@ class Xuexi(Automation):
             #     time.sleep(delay)
             #     self.click(rules['next'])
             #     continue
-
 
     def quiz_weekly(self, auto=False):
         ''' 0. click 每周答题
@@ -536,12 +586,12 @@ class Xuexi(Automation):
         while num:
             log.debug(f'挑战答题 第 {num} 题')
             self.content = self.wait.until(EC.presence_of_element_located((By.XPATH, rules['content_challenge']))).get_attribute('name').replace(u'\xa0', u' ')
-            log.info(f'[挑战题] {self.content}')
+            log.info(f'[挑战题 {num}] {self.content}')
             if not self.content:
                 raise RuntimeError(f'没有捕获到挑战题 题干 ...')
             options = self.wait.until(EC.presence_of_all_elements_located((By.XPATH, rules['options_challenge'])))
             self.options = [o.get_attribute('name').replace('|', ' ') for o in options]
-            log.debug(f'[选项] {self.options}')
+            log.info(f'[选项] {self.options}')
             if not "".join(self.options):
                 raise RuntimeError(f'没有捕获到挑战题 选项')
             bank = db.query(content=self.content, catagory='挑战题')
@@ -581,9 +631,19 @@ class Xuexi(Automation):
         return num
 
     def cycle(self):
-        '''因为刚获取分数情况，此时页面在mine页面，所以先做答题任务'''        
-        self.quiz()
+        view_time_obtain, view_time_total = self.bonus['视听学习时长']
+        if view_time_obtain < view_time_total:
+            self.bg_fm()
+        else:
+            log.debug('视听学习时长已达标，就不开 FM 了')
 
+        # -------------------------------------------------
+        # self.bg_fm()
+        # # 一边听FM，一边答题，岂不快哉      
+        # self.quiz()
+        # self.read_articles(13, 5, 2)
+        # -------------------------------------------------
+        self.quiz()
         '''收藏、分享、评论 只要需要阅读就直接来一套，不阅读即忽略
             不要问为什么，因为作者就这么懒.-_-.
         '''
@@ -596,15 +656,17 @@ class Xuexi(Automation):
             delay = cfg.getint('prefer', 'delay_read')
             ssc = cfg.getint('prefer', 'count_star_share_comment')
             self.read_articles(num, delay, ssc)
-
+        
         view_obtain, view_total = self.bonus['视听学习']
-        view_time_obtain, view_time_total = self.bonus['视听学习时长']
-        if view_obtain == view_total and view_time_obtain == view_time_total:
+        if view_obtain == view_total:
             log.debug(f'视听学习篇数和时长均已完成，跳过学习')
         else:
             num = cfg.getint('prefer', 'count_view')
-            delay = cfg.getint('prefer', 'delay_view')
-            self.view_videos(num, delay)        
+            if view_time_obtain < view_time_total:
+                delay = 5
+            else:
+                delay = cfg.getint('prefer', 'delay_view')
+            self.view_videos(num, delay)
 
 
 

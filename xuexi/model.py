@@ -15,8 +15,8 @@ import json
 from sqlalchemy import Column,Integer, String, Text, Boolean, create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from .mconfig import cfg
-from .mloggger import logger as log
+from .common import cfg
+from .common import logger as log
 
 # 创建对象的基类:
 Base = declarative_base()

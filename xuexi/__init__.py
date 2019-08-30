@@ -96,7 +96,7 @@ class App(object):
                 self._vdo_run()
             logger.info(f'视听学习耗时 {round(t.elapsed, 2)} 秒')
 
-        art = '已完成' != self.bonus['阅读文章'] or '已完成' != self.bonus['文章阅读时长']
+        art = '已完成' != self.bonus['阅读文章'] or '已完成' != self.bonus['文章学习时长']
         if art:
             with timer.Timer() as t:
                 self._art_run()

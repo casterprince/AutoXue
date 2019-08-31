@@ -17,8 +17,8 @@ pathdir = Path(__file__).parent / 'config'
 def create_cfg():
     
     cfg = ConfigParser()
-    cfg.read(pathdir / 'default.ini', encoding='utf-8')
-    cfg.read(pathdir / 'custom.ini', encoding='utf-8')
+    cfg.read(str(pathdir / 'default.ini)', encoding='utf-8')
+    cfg.read(str(pathdir / 'custom.ini'), encoding='utf-8')
 
     return cfg
 
@@ -31,12 +31,12 @@ def rules_to_dict(cfg):
     return rules
 
 def new_custom_ini_while_not_exists():
-    path = Path(pathdir / 'custom.ini')
+    path = Path(str(pathdir / 'custom.ini'))
     if path.exists():
         # print(f'custom.ini 已存在')
         return False
     cfg = ConfigParser()
-    cfg.read(pathdir / 'default.ini', encoding='utf-8')
+    cfg.read(str(pathdir / 'default.ini)', encoding='utf-8')
     with path.open(mode='w', encoding='utf-8') as fp:
         cfg.write(fp)
     print(f'用户配置文件 ./study/config.ini 已自动生成，请使用先进编辑器修改配置后重新运行')

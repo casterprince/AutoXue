@@ -188,14 +188,14 @@ class Model():
         datas = self.query(catagory=catagory)
         # logger.debug(len(datas))
         output = [data.to_dict() for data in datas]
-        with open(path,'w',encoding='utf-8') as fp:
+        with path.open('w',encoding='utf-8') as fp:
             json.dump(output,fp,indent=4,ensure_ascii=False)
         logger.info(f'JSON数据{len(datas)}条成功导出{path}')
         return True
 
     def _from_json(self, path, catagory='挑战题 单选题 多选题 填空题'):
         if path.exists():
-            with open(path,'r',encoding='utf-8') as fp:
+            with path.open('r',encoding='utf-8') as fp:
                 res = json.load(fp)
             for r in res:
                 bank = Bank.from_dict(r)
@@ -211,13 +211,13 @@ class Model():
     
     def _to_md(self, path, catagory='挑战题'):
         items = db.query(catagory=catagory)
-        with open(path, 'w', encoding='utf-8') as fp:
+        with path.open('w', encoding='utf-8') as fp:
             fp.write(f'# 学习强国 挑战答题 题库 {len(items):>4} 题\n')
             for item in items:
                 content = re.sub(r'\s\s+', '\_\_\_\_',re.sub(r'[\(（]出题单位.*', '', item.content))
                 options = "\n\n".join([f'+ **{x}**' if i==ord(item.answer)-65 else f'+ {x}' for i, x in enumerate(item.options.split('|'))])
                 fp.write(f'{item.id}. {content}  *{item.answer}*\n\n{options}\n\n')
-        with open(path.with_name('data-grid.md'), 'w', encoding='utf-8') as fp2:
+        with open(str(path.with_name('data-grid.md')), 'w', encoding='utf-8') as fp2:
             fp2.write(f'# 学习强国 挑战答题 题库 {len(items):>4} 题\n')
             fp2.write(f'|序号|答案|题干|选项A|选项B|选项C|选项D|\n')
             fp2.write(f'|:--:|:--:|--------|----|----|----|----|\n')

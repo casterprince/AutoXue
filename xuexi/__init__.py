@@ -22,8 +22,8 @@ for item in ['json', 'xml', 'xls']:
     p.mkdir(parents=True, exist_ok=True)
 logger = create_logger('xuexi', 'DEBUG')
 cfg = ConfigParser()
-cfg.read(path/'config-default.ini', encoding='utf-8')
-cfg.read(path/'config-custom.ini', encoding='utf-8')
+cfg.read(str(path/'config-default.ini'), encoding='utf-8')
+cfg.read(str(path/'config-custom.ini'), encoding='utf-8')
 
 class App(object):
     def __init__(self):

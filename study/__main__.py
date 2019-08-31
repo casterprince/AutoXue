@@ -10,7 +10,11 @@
 '''
 # 导入模块
 from .app import Xuexi
-# 实例化
-xue = Xuexi()
-# 执行
-xue.cycle()
+from .common import new_custom_ini_while_not_exists
+
+if not new_custom_ini_while_not_exists():
+    # 实例化
+    xue = Xuexi()
+    # 执行
+    xue.cycle()
+

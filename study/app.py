@@ -16,8 +16,7 @@ import string
 import time
 from pathlib import Path
 from urllib.parse import quote
-from subprocess import check_call
-from random import uniform, randint
+from random import uniform, randint, choice
 from itertools import accumulate
 from appium import webdriver
 from appium.webdriver.common.touch_action import TouchAction
@@ -33,7 +32,7 @@ class Automation():
     # 初始化 appium_server 基本参数
     def __init__(self, wait_seconds):
         log.debug(f'打开 appium_server 服务器...')
-        log.debug(f'配置 appium_server ...')
+        log.info(f'正在配置 appium_server ...')
         self.driver = webdriver.Remote(self.driver_server, self.desired_caps)
         self.wait = WebDriverWait(self.driver, wait_seconds, 1)
         self.size = self.driver.get_window_size()
@@ -51,29 +50,45 @@ class Automation():
         pass
 
     # 屏幕方法
-    def swipeUp(self):
+    def swipe_up(self):
         # 向上滑动屏幕
-        self.driver.swipe(self.size['width'] * uniform(0.55, 0.65),
-                          self.size['height'] * uniform(0.65, 0.75),
-                          self.size['width'] * uniform(0.55, 0.65),
-                          self.size['height'] * uniform(0.25, 0.35), uniform(800, 1200))
+        self.driver.swipe(self.size['width'] * 0.5,
+                          self.size['height'] * 0.85,
+                          self.size['width'] * 0.5,
+                          self.size['height'] * 0.15, uniform(800, 1200))
         log.debug(f'向上滑动屏幕')
 
-    def swipeDown(self):
+    def swipe_down(self):
         # 向下滑动屏幕
-        self.driver.swipe(self.size['width'] * uniform(0.55, 0.65),
-                          self.size['height'] * uniform(0.25, 0.35),
-                          self.size['width'] * uniform(0.55, 0.65),
-                          self.size['height'] * uniform(0.65, 0.75), uniform(800, 1200))
+        self.driver.swipe(self.size['width'] * 0.5,
+                          self.size['height'] * 0.15,
+                          self.size['width'] * 0.5,
+                          self.size['height'] * 0.85, uniform(800, 1200))
         log.debug(f'向下滑动屏幕')
 
-    def swipeRight(self):
+    def swipe_right(self):
+        # 向左滑动屏幕
+        self.driver.swipe(self.size['width'] * 0.8,
+                          self.size['height'] * 0.5,
+                          self.size['width'] * 0.2,
+                          self.size['height'] * 0.5, uniform(800, 1200))
+        log.debug(f'向左滑动屏幕')
+
+    def swipe_left(self):
         # 向右滑动屏幕
-        self.driver.swipe(self.size['width'] * uniform(0.01, 0.11),
-                          self.size['height'] * uniform(0.75, 0.89),
-                          self.size['width'] * uniform(0.89, 0.98),
-                          self.size['height'] * uniform(0.75, 0.89), uniform(800, 1200))
+        self.driver.swipe(self.size['width'] * 0.2,
+                          self.size['height'] * 0.5,
+                          self.size['width'] * 0.8,
+                          self.size['height'] * 0.5, uniform(800, 1200))
         log.debug(f'向右滑动屏幕')
+
+    def flick_up(self):
+        # 快速向上滑动屏幕
+        self.driver.flick(self.size['width'] * 0.5,
+                          self.size['height'] * 0.8,
+                          self.size['width'] * 0.5,
+                          self.size['height'] * 0.3)
+        log.debug(f'快速向上滑动屏幕')
 
     def click(self, rule):
         log.debug(f'clicking {rule}')
@@ -91,8 +106,9 @@ class Automation():
     def mute(self):
         log.debug(f'触发 KEYCODE_VOLUME_MUTE 事件 ...')
         self.driver.keyevent(164)
-
-
+        # for i in range(10):
+        #     self.driver.keyevent(25)
+        #     time.sleep(1)
 
 class Xuexi(Automation):
     def __init__(self):
@@ -120,19 +136,25 @@ class Xuexi(Automation):
         self.options = []
         self.bank = None
         self.bonus = self._get_bonus()
+        print()
+        for title in ['阅读文章', '视听学习', '每日答题', '挑战答题']:
+            obtain, total = self.bonus[title]
+            print(f'\t{title} {obtain}/{total}', end='')
+        print(f'\n')
+        self.comments = self._load()
 
-    # def _load(self):
-    #     path = Path(cfg.get('database_server', 'Staging'))
-    #     if not path.exists():
-    #         return []
-    #     with path.open(mode='r', encoding='utf-8') as fp:
-    #         data = json.load(fp)
-    #     return data
+    def _load(self):
+        path = Path(cfg.get('database_server', 'Staging'))
+        if not path.exists():
+            return []
+        with path.open(mode='r', encoding='utf-8') as fp:
+            data = json.load(fp)
+        return data
 
-    # def _dump(self):
-    #     path = Path(cfg.get('database_server', 'Staging'))
-    #     with path.open(mode='w', encoding='utf-8') as fp:
-    #         json.dump(self.json_bank, fp, indent=4, ensure_ascii=False)
+    def _dump(self):
+        path = Path(cfg.get('database_server', 'Staging'))
+        with path.open(mode='w', encoding='utf-8') as fp:
+            json.dump(self.json_bank, fp, indent=4, ensure_ascii=False)
 
     def _find_in_json_bank(self, content):
         res = None
@@ -168,6 +190,7 @@ class Xuexi(Automation):
         while getting_bonus:
             titles = [ele.get_attribute('name') for ele in self.wait.until(EC.presence_of_all_elements_located((By.XPATH, rules['bonus_titles'])))]
             scores = self.wait.until(EC.presence_of_all_elements_located((By.XPATH, rules['bonus_nums'])))
+            first_title = titles[0]
             for title, score in zip(titles, scores):
                 res = score.get_attribute('name')
                 obtain, total = [int(x) for x in re.findall(r'\d+', res)]
@@ -177,21 +200,89 @@ class Xuexi(Automation):
                     getting_bonus = False
                     break
             else:
-                self.swipeUp()
-        print()
-        for title in ['阅读文章', '视听学习', '每日答题', '挑战答题']:
-            obtain, total = bonus[title]
-            print(f'\t{title} {obtain}/{total}', end='')
-        print()
+                self.driver.scroll(title, first_title, 1000)
         self.back()
         return bonus
 
 
     def _star_share_comment(self, title):
-        log.debug(f'{title} Star Share Comment 三件套 ...')
-        return 1
+        try:
+            edit_area = self.driver.find_element_by_xpath(rules['edit_area'])
+            log.debug(f'这是一篇开启评论的文章')
+        except Exception as e:
+            edit_area = None
+            log.debug(f'这是一篇关闭评论的文章\n{e}')
+        if edit_area:
+            log.debug(f'{title} Star Share Comment 三件套 ...')
+            edit_area.click()
+            comments_matched = False
+            for item in self.comments:
+                for tag in item['tags']:
+                    if tag in title:
+                        msg = choice(item['comments'])
+                        comments_matched = True
+                        break
+                if comments_matched:
+                    break
+            else:
+                msg = choice(self.comments[0]['comments'])
+            # msg = '''不忘初心，牢记使命，高举中国特色社会主义伟大旗帜，决胜全面建成小康社会，夺取新时代中国特色社会主义伟大胜利，为实现中华民族伟大复兴的中国梦不懈奋斗。'''
+            edit_input = self.wait.until(EC.presence_of_element_located((By.XPATH, rules['edit_input'])))
+            log.info(f'留言：{msg}')
+            edit_input.send_keys(msg)
+            self.click(rules['btn_comments_publish'])   # 点击发布按钮
+            self.click(rules['btn_star'])               # 点击收藏按钮
+            self.click(rules['btn_share'])              # 点击分享按钮
+            self.click(rules['btn_share2xuexi'])        # 分享到學習强國
+            self.back()                                 # 返回，放弃分享
+            if not cfg.getboolean('prefer', 'keep_star_comments'):
+                self.click(rules['btn_comments_delete'])            # 点击删除留言按钮
+                self.click(rules['btn_comments_delete_confirm'])    # 点击确认删除按钮
+                self.click(rules['btn_star'])                       # 点击取消收藏按钮
+            return 1
+        else:
+            return 0
 
-    def read_articles(self, num:int, delay:int, ssc:int):
+    def _read_article(self, title, delay, delay_unit:int=10):
+        log.debug(f'阅读一篇新闻 {title}')
+        for i in range(delay//delay_unit):
+            time.sleep(delay_unit)
+            self.swipe_up()
+
+        # 新思路
+        #   对于开放评论的文章，点击评论按钮将直接跳到文末
+        #   对于关闭评论的文章，你都关闭评论了，我为什么要给你点赞
+        try:
+            comments = self.driver.find_element_by_xpath(rules['btn_comments'])
+            log.debug(f'既然你开放了评论，我就给你点个赞吧，一场缘分')
+            comments.click()
+            time.sleep(1)
+            like = self.driver.find_element_by_xpath(rules['thumb_up'])
+            log.debug(f'location_in_view of like: {like.location_in_view}')
+            like.click()
+            time.sleep(2)
+        except Exception as e:
+            log.debug(f'{e}既然你关闭了评论，我就没办法给你点赞了，有缘无份')
+
+        # 获取点赞元素位置之前应该让屏幕静止
+        # 之前的想法太单纯，想着一直滑动屏幕直到thumb up出现
+        # for i in range(5):
+        #     time.sleep(2)
+        #     try:
+        #         like = self.driver.find_element_by_xpath(rules['thumb_up'])
+        #         log.debug(f'location_in_view of like: {like.location_in_view}')
+        #         like.click()
+        #         log.debug(f'刷到你就是缘分，给你一个免费的赞👍')
+        #         time.sleep(2)
+        #         break
+        #     except Exception as e:
+        #         log.debug(e)
+        #         log.debug(f'没有找到 like-wrapper')
+        #         self.swipe_up()
+        # else:
+        #     log.debug(f'尝试了 5 次，实在找不到点赞按钮，放弃吧')
+
+    def read(self, num:int, delay:int, ssc:int):
         log.debug(f'阅读文章 {num} 篇 {delay} 秒/篇')
         tab_name = cfg.get('prefer', 'column_of_news')
         finding_column = True
@@ -208,11 +299,13 @@ class Xuexi(Automation):
                     break
             else:
                 log.debug(f'没有找到栏目 {tab_name} 拖动一屏 ...')
-                self.driver.swipe(column.location['x'], column.location['y'], first_column.location['x'], first_column.location['y'], 500)
+                self.driver.scroll(column, first_column, 1000)
+                # self.driver.swipe(column.location['x'], column.location['y'], first_column.location['x'], first_column.location['y'], 500)
+        self.click(rules['work']) # 刷新
         readed_list = []
         while num > 0:
-            news = self.wait.until(EC.presence_of_all_elements_located((By.XPATH, rules['news_list'])))
-            fixed_top, fixed_bottom = news[0], news[-1]
+            # news = self.wait.until(EC.presence_of_all_elements_located((By.XPATH, rules['news_list'])))
+            # fixed_top, fixed_bottom = news[0], news[-1]
             try:
                 articles = self.driver.find_elements_by_xpath(rules['news_title'])
             except:
@@ -224,14 +317,18 @@ class Xuexi(Automation):
                 num -= 1
                 log.info(f'[{num}] {title}')
                 article.click()
-                time.sleep(delay)                
+                self._read_article(title, delay)
                 if ssc > 0:
                     ssc -= self._star_share_comment(title)
                 self.back()
                 readed_list.append(title)
+                if 0 == num:
+                    break
             else:
-                self.driver.swipe(fixed_bottom.location['x'], fixed_bottom.location['y'], 
-                                fixed_top.location['x'], fixed_top.location['x'], 1000)
+                self.swipe_up()
+                # self.driver.scroll(fixed_bottom, fixed_top, 1000)
+                # self.driver.swipe(fixed_bottom.location['x'], fixed_bottom.location['y'], 
+                #                 fixed_top.location['x'], fixed_top.location['x'], 1000)
         else:
             log.debug(f'新闻学习完毕!')
         
@@ -240,7 +337,31 @@ class Xuexi(Automation):
             
 
     def view_videos(self, num:int, delay:int):
-        log.debug(f'视听学习 {num} 则 {delay} 秒/则')
+        log.debug(f'视听学习 百灵短视频 {num} 则 {delay} 秒/则')
+        channel = cfg.get('prefer', 'column_of_video')
+        rule = re.sub(r'default_channel', channel, rules['ding_channel'])
+        self.click(rules['ding'])
+        self.click(rule)
+        self.click(rules['first_video'])
+        while num > 0:
+            num -= 1
+            log.info(f'视听学习 百灵 第 {num} 则, 观看 {delay} 秒 ...')
+            time.sleep(delay) # 程序运行太快，视频还没刷出来就上滑了，所以建议再给 5秒刷新时间
+            # self.flick_up() # 太快了，模拟器承受不住
+            self.swipe_up()
+        else:
+            log.info(f'视听学习完成')
+            self.back()
+
+    
+    def view_newscast(self, delay):
+        log.debug(f'视听学习 新闻联播 {delay} 秒')
+        self.click(rules['contact'])
+        self.click(rules['newscast_enter'])
+        self.click(rules['first_video'])
+        log.info(f'正在收看新闻联播 {delay} 秒 ...')
+        time.sleep(delay)
+        self.back()
 
     def bg_fm(self):
         ''' 如果视听学习时长未达标，进入APP先打开后台FM'''
@@ -290,7 +411,7 @@ class Xuexi(Automation):
 
         challenge_obtain, challenge_total = self.bonus['挑战答题']
         if challenge_obtain == challenge_total:
-            log.debug(f'挑战答题已完成，跳过挑战答题')
+            log.info(f'挑战答题已完成，跳过挑战答题')
         else:
             num = cfg.getint('prefer', 'count_challenge')
             delay = cfg.getint('prefer', 'delay_challenge')
@@ -301,15 +422,16 @@ class Xuexi(Automation):
 
         today_weekday = time.strftime("%A", time.localtime())
         if quiz_weekday == today_weekday:
+            log.info(f'今天 {today_weekday}, 真是一个做每周答题和专项答题的好日子')
             weekly_obtain, _ = self.bonus['每周答题']
             if 0 == weekly_obtain:
-                self.weekly()
+                self.quiz_weekly()
             else:
                 log.debug(f'每周答题已挑战，跳过每周答题')
 
             monthly_obtain, _ = self.bonus['专项答题']
             if 0 == monthly_obtain:
-                self.monthly()
+                self.quiz_monthly()
             else:
                 log.debug(f'专项答题已挑战，跳过专项答题')
         else:
@@ -480,9 +602,9 @@ class Xuexi(Automation):
             2. score_reached? back: again
         '''        
         if total - obtain + force_daily == 0:
-            log.debug(f'{obtain}/{total} [{force_daily}] 跳过每日答题')
+            log.info(f'每日答题已完成，跳过每日答题')
             return 
-        log.debug(f'每日答题 {delay} 秒/组 (force_daily | {force_daily})')
+        log.info(f'每日答题 {delay} 秒/组 (force_daily | {force_daily})')
         self.click(rules['daily'])
         while True:
             for i in range(5):
@@ -534,11 +656,13 @@ class Xuexi(Automation):
         ''' 0. click 每周答题
         '''
         log.debug(f'每周答题')
+        log.info(f'骚年你想太多了，每周答题都要用自动化')
 
     def quiz_monthly(self, auto=False):
         ''' 0. click 专项答题
         '''
         log.debug(f'专项答题')
+        log.info(f'骚年你想太多了，专项答题都要用自动化')
 
     def _search(self, bank)->str:
         log.debug(f'正在问度娘')
@@ -565,15 +689,12 @@ class Xuexi(Automation):
             _, answer = counts[0]
             return answer
                 
-
-
     def quiz_challenge(self, num:int=30, delay:int=2):
         while self._quiz_challenge_round(num, delay):
             log.debug(f'没有达成 {num} 题, 再来一局')
         else:
             log.debug(f'挑战达成，哈哈哈')
-            
-
+          
     def _quiz_challenge_round(self, num:int=30, delay:int=2):
         ''' 0. click 挑战答题
             1. cycle 挑战题
@@ -631,42 +752,49 @@ class Xuexi(Automation):
         return num
 
     def cycle(self):
+        ''' 0. 在听广播时答题，可以节省视听学习时间
+            1. 先做答题项目，因为新闻阅读过程不可避免遇到一篇视频将中断广播
+            2. 最后根据积分情况进行灵活的视听学习
+        '''
         view_time_obtain, view_time_total = self.bonus['视听学习时长']
         if view_time_obtain < view_time_total:
             self.bg_fm()
         else:
-            log.debug('视听学习时长已达标，就不开 FM 了')
+            log.info('视听学习时长已达标，跳过打开 FM')
 
-        # -------------------------------------------------
-        # self.bg_fm()
-        # # 一边听FM，一边答题，岂不快哉      
-        # self.quiz()
-        # self.read_articles(13, 5, 2)
-        # -------------------------------------------------
         self.quiz()
         '''收藏、分享、评论 只要需要阅读就直接来一套，不阅读即忽略
             不要问为什么，因为作者就这么懒.-_-.
         '''
         read_obtain, read_total = self.bonus['阅读文章']
-        read_time_obtain, read_time_total = self.bonus['文章学习时长']
+        read_time_obtain, read_time_total = self.bonus['文章学习时长']        
         if read_obtain == read_total and read_time_obtain == read_time_total:
-            log.debug(f'阅读文章篇数和时长均已完成，跳过学习')
+            log.info(f'阅读文章篇数和时长均已完成，跳过学习')
         else:
-            num = cfg.getint('prefer', 'count_read')
-            delay = cfg.getint('prefer', 'delay_read')
+            read_seconds = 120 * (read_time_total - read_time_obtain) 
+            num = cfg.getint('prefer', 'count_read_ex')
+            read_count = num + read_total - read_obtain
+            delay = max(round(read_seconds / read_count), 10)
             ssc = cfg.getint('prefer', 'count_star_share_comment')
-            self.read_articles(num, delay, ssc)
+            self.read(read_count, delay, ssc)
         
+        self.bonus = self._get_bonus()
         view_obtain, view_total = self.bonus['视听学习']
-        if view_obtain == view_total:
-            log.debug(f'视听学习篇数和时长均已完成，跳过学习')
+        view_time_obtain, view_time_total = self.bonus['视听学习时长']
+        view_seconds = 180 * (view_time_total - view_time_obtain) # 单位：秒
+        view_count = view_total - view_obtain
+        if 0 == view_seconds and 0 == view_count:
+            log.info(f'视听学习篇目和时长均已完成，跳过学习')
+        elif 0 == view_seconds and 0 < view_count:
+            delay_of_each_video = 10
+            log.info(f'视听学习时长已完成，篇目未完成，以每则视频 {delay_of_each_video} 秒钟时间刷百灵')
+            self.view_videos(view_count, delay_of_each_video)
+        elif 0 < view_seconds and 0 == view_count:
+            log.info(f'视听学习时长未完成，篇目已完成，打开新闻联播看 {view_seconds} 秒')
+            self.view_newscast(view_seconds)
         else:
-            num = cfg.getint('prefer', 'count_view')
-            if view_time_obtain < view_time_total:
-                delay = 5
-            else:
-                delay = cfg.getint('prefer', 'delay_view')
-            self.view_videos(num, delay)
-
-
-
+            log.info(f'视听学习篇目和时长均未完成，照着配置来咯')
+            num = cfg.getint('prefer', 'count_view_ex')
+            count = view_count + num
+            delay = view_seconds // count + 5
+            self.view_videos(count, delay)

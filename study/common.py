@@ -13,11 +13,12 @@ import logging
 from configparser import ConfigParser
 from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
-
+pathdir = Path(__file__).parent / 'config'
 def create_cfg():
+    
     cfg = ConfigParser()
-    cfg.read('./xuexi/config/default.ini', encoding='utf-8')
-    cfg.read('./xuexi/config/custom.ini', encoding='utf-8')
+    cfg.read(pathdir / 'default.ini', encoding='utf-8')
+    cfg.read(pathdir / 'custom.ini', encoding='utf-8')
 
     return cfg
 
@@ -28,6 +29,18 @@ def rules_to_dict(cfg):
         rules.setdefault(option, cfg.get('rules', option))
 
     return rules
+
+def new_custom_ini_while_not_exists():
+    path = Path(pathdir / 'custom.ini')
+    if path.exists():
+        # print(f'custom.ini 已存在')
+        return False
+    cfg = ConfigParser()
+    cfg.read(pathdir / 'default.ini', encoding='utf-8')
+    with path.open(mode='w', encoding='utf-8') as fp:
+        cfg.write(fp)
+    print(f'用户配置文件 ./study/config.ini 已自动生成，请使用先进编辑器修改配置后重新运行')
+    return True
 
 
 def create_logger(cfg):
@@ -98,3 +111,6 @@ class Timer:
 cfg = create_cfg()
 rules = rules_to_dict(cfg)
 logger = create_logger(cfg)
+
+if __name__ == "__main__":
+    new_custom_ini_while_not_exists()

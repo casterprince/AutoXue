@@ -214,6 +214,8 @@ class Model():
         with path.open('w', encoding='utf-8') as fp:
             fp.write(f'# 学习强国 挑战答题 题库 {len(items):>4} 题\n')
             for item in items:
+                if '' == item.answer:
+                    continue
                 content = re.sub(r'\s\s+', '\_\_\_\_',re.sub(r'[\(（]出题单位.*', '', item.content))
                 options = "\n\n".join([f'+ **{x}**' if i==ord(item.answer)-65 else f'+ {x}' for i, x in enumerate(item.options.split('|'))])
                 fp.write(f'{item.id}. {content}  *{item.answer}*\n\n{options}\n\n')
@@ -222,6 +224,8 @@ class Model():
             fp2.write(f'|序号|答案|题干|选项A|选项B|选项C|选项D|\n')
             fp2.write(f'|:--:|:--:|--------|----|----|----|----|\n')
             for item in items:
+                if '' == item.answer:
+                    continue
                 content = re.sub(r'\s\s+', '\_\_\_\_',re.sub(r'[\(（]出题单位.*', '', item.content))
                 options = " | ".join([f'**{x}**' if i==ord(item.answer)-65 else f'{x}' for i, x in enumerate(item.options.split('|'))])
                 fp2.write(f'| {item.id} | {item.answer} | {content} | {options} |\n')

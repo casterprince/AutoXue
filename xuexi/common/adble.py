@@ -196,7 +196,9 @@ if __name__ == "__main__":
     parse.add_argument('-u', '--uiautomator', metavar='uiautomator', nargs='?', const=True, type=bool, default=False, help='解析布局xml并上传')
     parse.add_argument('-v', '--virtual', metavar='virtual', nargs='?', const=True, type=bool, default=False, help='是否模拟器')
     args = parse.parse_args()
-    adb = Adble(f'noname', args.virtual)
+    host = '127.0.0.1'
+    port = '62001'
+    adb = Adble(f'noname', args.virtual, host, port)
     if args.filename:
         path = Path(args.filename)
         if args.screenshot:

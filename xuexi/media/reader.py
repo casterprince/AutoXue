@@ -77,9 +77,10 @@ class Reader:
         self.ad.tap(self.home)
         # print(list(columns)[-1])
         # 找到“订阅”栏，这里第一次感受到while...else...和for...else...的妙处
+        self._fresh()
         while 0j == self.feeds:
             columns = [(t, p) for t, p in zip(self.xm.texts(cfg.get(self.rules, 'rule_columns_content')), self.xm.pos(cfg.get(self.rules, 'rule_columns_bounds')))]
-            p0, p1 = columns[0][1], columns[-1][1]
+            p0, p1 = columns[0][1], columns[-2][1]
             for col in columns:
                 if cfg.get('common', 'article_column_name') == col[0]:
                     self.feeds = col[1]
